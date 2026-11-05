@@ -1,0 +1,61 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - DB_URL=postgres://keyforge:forgepass@postgres:5432/keyforge_db?sslmode=disable
+      - REDIS_URL=redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - keyforge_net
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: keyforge
+      POSTGRES_PASSWORD: forgepass
+      POSTGRES_DB: keyforge_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./migrations/0001_init.sql:/docker-entrypoint-initdb.d/0001_init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keyforge -d keyforge_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - keyforge_net
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - keyforge_net
+
+networks:
+  keyforge_net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redis_data:

@@ -1,0 +1,67 @@
+name: KeyForge CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: keyforge
+          POSTGRES_PASSWORD: forgepass
+          POSTGRES_DB: keyforge_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U keyforge -d keyforge_db"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.26.x'
+        cache: true
+
+    - name: Download Dependencies
+      run: go mod download
+
+    - name: Run Database Migrations
+      env:
+        PGPASSWORD: forgepass
+      run: |
+        sudo apt-get update && sudo apt-get install -y postgresql-client
+        psql -h 127.0.0.1 -U keyforge -d keyforge_db -f migrations/0001_init.sql
+
+    - name: Run Tests with Coverage
+      env:
+        DB_URL: postgres://keyforge:forgepass@localhost:5432/keyforge_db?sslmode=disable
+        REDIS_URL: localhost:6379
+        HMAC_SECRET: test-ci-secret-key-123
+      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+    - name: Build Binary
+      run: go build -v -o bin/keyforge ./cmd/keyforge
