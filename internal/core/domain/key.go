@@ -32,7 +32,7 @@ type Client struct {
 }
 
 type PlainKeyResponse struct {
-	ID        string
-	PlainKey  string
-	ExpiresAt time.Time
+	ID        string    `json:"id"`
+	PlainKey  string    `json:"plain_key"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
